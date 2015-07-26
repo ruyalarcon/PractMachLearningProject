@@ -1,0 +1,72 @@
+---
+title: "Practical Machine Learning Project"
+author: "RAlarcon"
+date: "July 26, 2015"
+output: html_document
+---
+
+##Overview
+This report describes the construction of a prediction model for the manner in wich a group of 6 people exercise. The data was collected by the Human Activity Recognition group at PUC Rio, Brazil (<http://groupware.les.inf.puc-rio.br/har>). The dataset consists of a training and test set containing data from 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Data was collected from accelerometers on the belt, forearm, arm, and dumbell used by the participants. 
+
+##Loading data
+```{r}
+train <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+##Model construction
+Considering that data shall come from the accelerometers on the belt, forearm, arm, and dumbells, unrelated variables will be removed. 
+
+```{r}
+print(dim(test))
+print(dim(train))
+accelData <- grepl("accel|belt|arm|forearm|dumbbell", colnames(test))
+accelData2 <- grepl("accel|belt|arm|forearm|dumbbell|classe", colnames(train))
+testAccel = test[,accelData]
+trainAccel = train[,accelData2]
+print(dim(testAccel))
+print(dim(trainAccel))
+```
+The number of columns is reduced from 160 to 153 for train set and 152 for test set. Next, we shall remove missing values, however a strict policy will result in 0 rows for the test set. Hence a tolerance threshold per observed variable is set to 50% of missing values.
+
+```{r}
+threshold <- which((colSums(!is.na(testAccel)) >= 0.5*nrow(testAccel)))
+threshold2 <- which((colSums(!is.na(trainAccel)) >= 0.5*nrow(trainAccel)))
+cleanTest <- testAccel[,threshold]
+cleanTrain <- trainAccel[,threshold2]
+print(dim(cleanTest))
+print(dim(cleanTrain))
+```
+The number of columns is reduced from to 53 and 52 for train and test sets whereas the number of rows remain the same in both datasets.
+
+##Cross Validation
+
+Now the data is partioned into 60% training and 40% testing by the classe variable.
+
+```{r}
+library(caret)
+set.seed(1234)
+inTraining  <- createDataPartition(y=cleanTrain$classe, p = 0.6, list = FALSE)
+training    <- cleanTrain[inTraining, ]
+testing     <- cleanTrain[-inTraining, ]
+
+```
+
+##Prediction
+Next, we use random forest to fit the model, observe the principal variables and evaluate the confusion matrix.
+```{r}
+fitControl <- trainControl(method="cv", number=3, verboseIter=F)
+fit <- train(classe ~ ., data=training, method="rf", trControl=fitControl)
+fit$finalModel
+print(fit)
+varImp(fit)
+```
+
+```{r}
+classe2=predict(fit,testing)
+cm <- confusionMatrix(testing$classe,classe2)
+print(cm)
+print(cm$overall)
+```
+
+The model accuracy is 99.1%
